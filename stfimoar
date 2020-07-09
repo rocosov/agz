@@ -1,0 +1,476 @@
+select lpad(a.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       'INVENTARIO' desc_motivo,
+       c.num_invent numero,
+       fec_ini_invent fec_ent_sal,
+       c.cod_sucursal,
+       '10' cod_motivo_ent_sal,
+       sum((nvl(d.cant_fisica, 0))) cant_ent,
+       0 cant_sal,
+       a.cod_articulo articulo,
+       ' ' nro_lote,
+       'I' tipo,
+       null costo_articulo,
+       null um,
+       null tipo_comprobante
+  from st_invent_cab c, st_invent_det d, st_articulos a, sucursales s
+ where c.cod_empresa = :p_cod_empresa
+   and lpad(c.cod_sucursal, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal), 5, ' ')
+   and c.fec_ini_invent between nvl(:p_fecha_des, c.fec_ini_invent) and
+       nvl(:p_fecha_has, c.fec_ini_invent)
+   and c.cod_empresa = d.cod_empresa
+   and c.ser_invent = d.ser_invent
+   and c.num_invent = d.num_invent
+   and (:p_cod_articulo_des is null or
+       d.cod_articulo >= :p_cod_articulo_des)
+   and (:p_cod_articulo_has is null or
+       d.cod_articulo <= :p_cod_articulo_has)
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or 'INV' = :p_tip_comprobante)
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal = s.cod_sucursal
+ group by lpad(a.cod_articulo, 20, ' '),
+          a.descripcion,
+          s.descripcion,
+          'INVENTARIO',
+          c.num_invent,
+          fec_ini_invent,
+          c.cod_sucursal,
+          '10',
+          0,
+          a.cod_articulo,
+          'I'
+
+UNION ALL
+
+select lpad(a.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       upper(m.descripcion) desc_motivo,
+       c.num_ent_sal,
+       c.fec_ent_sal,
+       c.cod_sucursal,
+       c.tip_ent_sal as cod_motivo_ent_sal,
+       decode(m.ind_ent_sal, 'E', nvl(d.cantidad_ub, 0), 0) cant_ent,
+       decode(m.ind_ent_sal, 'S', nvl(d.cantidad_ub, 0), 0) cant_sal,
+       a.cod_articulo articulo,
+       d.nro_lote,
+       'A' tipo,
+       decode(c.cod_moneda,
+              2,
+              ((d.costo * c.tip_cambio_us) / d.mult_x) / d.div_x,
+              (d.costo / d.mult_x) / d.div_x) as costo_articulo,
+       d.cod_unidad_ub um,
+       c.tip_ent_sal tipo_comprobante
+  from st_entsal_cab     c,
+       st_entsal_det     d,
+       st_articulos      a,
+       sucursales        s,
+       st_motivo_ent_sal m
+ where c.cod_empresa = :p_cod_empresa
+   and lpad(c.cod_sucursal, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal), 5, ' ')
+   and (:p_cod_articulo_des is null or
+       d.cod_articulo >= :p_cod_articulo_des)
+   and (:p_cod_articulo_has is null or
+       d.cod_articulo <= :p_cod_articulo_has)
+   and c.fec_ent_sal between nvl(:p_fecha_des, c.fec_ent_sal) and
+       nvl(:p_fecha_has, c.fec_ent_sal)
+   and c.cod_empresa = d.cod_empresa
+   and c.tip_ent_sal = d.tip_ent_sal
+   and c.ser_ent_sal = d.ser_ent_sal
+   and c.num_ent_sal = d.num_ent_sal
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or c.tip_ent_sal = :p_tip_comprobante)
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal = s.cod_sucursal
+   and c.cod_motivo_ent_sal = m.cod_motivo_ent_sal
+   and c.estado <> 'A'
+
+UNION ALL
+
+select lpad(a.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       upper(t.descripcion),
+       c.nro_comprobante,
+       c.fec_comprobante,
+       c.cod_sucursal,
+       c.tip_comprobante,
+       decode(t.stock, 'S', nvl(d.cantidad*NVL(R.MULTIPLICA,1), 0), 0),
+       decode(t.stock, 'R', nvl(d.cantidad*NVL(R.MULTIPLICA,1), 0), 0),
+       a.cod_articulo articulo,
+       d.nro_lote,
+       'V' tipo,
+       -- NULL costo_articulo, null um
+       --decode(ce.cod_moneda, 2, ((de.costo*ce.tip_cambio_us)/de.mult_x)/de.div_x, (de.costo/d.mult_x)/de.div_x)as costo_articulo,  de.cod_unidad_ub um
+       decode(c.cod_moneda,
+              2,
+              ((d.precio_unitario * c.tip_cambio) / d.mult_x) / d.div_x,
+              (d.precio_unitario / d.mult_x) / d.div_x) as costo_articulo,
+       d.cod_unidad_medida um,
+       c.tip_comprobante tipo_comprobante
+  from vt_comprobantes_cabecera c,
+       vt_comprobantes_detalle  d,
+       st_articulos             a,
+       sucursales               s,
+       tipos_comprobantes       t,
+       ST_ARTICULOS_RELACION    R
+ where c.cod_empresa = :p_cod_empresa
+   and c.fec_comprobante between
+       nvl(:p_fecha_des, to_date('01/01/0001', 'DD/MM/YYYY')) and
+       nvl(:p_fecha_has, to_date('31/12/9999', 'DD/MM/YYYY'))
+   and lpad(c.cod_sucursal, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal), 5, ' ')
+   and c.cod_empresa = d.cod_empresa
+   and c.tip_comprobante = d.tip_comprobante
+   and c.ser_comprobante = d.ser_comprobante
+   and c.nro_comprobante = d.nro_comprobante
+   and (:p_cod_articulo_des is null or
+       d.cod_articulo >= :p_cod_articulo_des)
+   and (:p_cod_articulo_has is null or
+       d.cod_articulo <= :p_cod_articulo_has)
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or
+       c.tip_comprobante = :p_tip_comprobante)
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal = s.cod_sucursal
+   and c.cod_empresa = t.cod_empresa
+   and c.tip_comprobante = t.tip_comprobante
+   and nvl(d.ind_no_stock, 'N') <> 'S'
+   and nvl(c.estado, 'N') <> 'A'
+   AND C.TIP_COMPROBANTE <> 'EXP' ------
+   AND D.COD_EMPRESA=R.COD_EMPRESA
+   AND D.COD_ARTICULO=R.COD_ARTICULO
+   AND D.COD_UNIDAD_REL=R.COD_RELACION
+UNION ALL
+
+Select lpad(a.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       'NOTA DE ENVÍO',
+       c.nro_envio,
+       c.fecha,
+       c.cod_sucursal_ent,
+       c.tip_envio,
+       nvl(d.cantidad, 0),
+       0,
+       a.cod_articulo articulo,
+       d.nro_lote,
+       'E' tipo,
+       null costo_articulo,
+       null um,
+       null tipo_comprobante
+  from st_notas_envio_cab c,
+       st_notas_envio_det d,
+       st_articulos       a,
+       sucursales         s
+ where c.cod_empresa = :p_cod_empresa
+   and lpad(c.cod_sucursal_ent, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal_ent), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal_ent), 5, ' ')
+   and (:p_cod_articulo_des is null or
+       d.cod_articulo >= :p_cod_articulo_des)
+   and (:p_cod_articulo_has is null or
+       d.cod_articulo <= :p_cod_articulo_has)
+   and c.fecha between nvl(:p_fecha_des, c.fecha) and
+       nvl(:p_fecha_has, c.fecha)
+   and c.cod_empresa = d.cod_empresa
+   and c.tip_envio = d.tip_envio
+   and c.nro_envio = d.nro_envio
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or c.tip_envio = :p_tip_comprobante)
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal_ent = s.cod_sucursal
+   and d.ind_recepcion = 'S'
+   and nvl(c.estado, 'A') = 'A'
+
+UNION ALL
+
+select lpad(a.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       'NOTA DE ENVÍO',
+       c.nro_envio,
+       c.fecha,
+       c.cod_sucursal,
+       c.tip_envio,
+       0,
+       nvl(d.cantidad, 0),
+       a.cod_articulo articulo,
+       d.nro_lote,
+       'E' tipo,
+       null costo_articulo,
+       null um,
+       null tipo_comprobante
+  from st_notas_envio_cab c,
+       st_notas_envio_det d,
+       st_articulos       a,
+       sucursales         s
+ where c.cod_empresa = :p_cod_empresa
+   and lpad(c.cod_sucursal, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal), 5, ' ')
+   and (:p_cod_articulo_des is null or
+       d.cod_articulo >= :p_cod_articulo_des)
+   and (:p_cod_articulo_has is null or
+       d.cod_articulo <= :p_cod_articulo_has)
+   and c.fecha between nvl(:p_fecha_des, c.fecha) and
+       nvl(:p_fecha_has, c.fecha)
+   and c.cod_empresa = d.cod_empresa
+   and c.tip_envio = d.tip_envio
+   and c.nro_envio = d.nro_envio
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or c.tip_envio = :p_tip_comprobante)
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal = s.cod_sucursal
+   and nvl(c.estado, 'A') = 'A'
+
+UNION ALL
+
+select lpad(d.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       'FACTURA DE COMPRA' desc_motivo,
+       c.nro_comprobante numero,
+       nvl(trunc(c.fec_estado), c.fec_comprobante) fec_ent_sal,
+       c.cod_sucursal,
+       c.tip_comprobante cod_motivo_ent_sal,
+       nvl(d.cantidad_ub, 0) cant_ent,
+       0 cant_sal,
+       a.cod_articulo articulo,
+       null,
+       'C' tipo,
+       decode(c.cod_moneda,
+              2,
+              ((d.precio_unitario * c.tip_cambio) / d.mult_x) / d.div_x,
+              (d.precio_unitario / d.mult_x) / d.div_x) as costo_articulo,
+       d.cod_unidad_medida um,
+       c.tip_comprobante tipo_comprobante
+  from cm_compras_cabecera c,
+       cm_compras_detalle  d,
+       st_articulos        a,
+       sucursales          s,
+       tipos_comprobantes  tc
+--       parametros_generales p
+ where c.cod_empresa = :p_cod_empresa
+      --    and p.cod_modulo = 'CM'
+      --    and p.parametro = 'TIPO_FACTURA'
+      ---    and c.tip_comprobante = 'FAC'--ltrim( rtrim( p.valor ) )
+   and c.cod_empresa = d.cod_empresa
+   and c.tip_comprobante = d.tip_comprobante
+   and c.ser_comprobante = d.ser_comprobante
+   and c.nro_comprobante = d.nro_comprobante
+   and lpad(c.cod_sucursal, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal), 5, ' ')
+   and trunc(nvl(c.fec_estado, c.fec_comprobante)) between
+       nvl(:p_fecha_des, trunc(nvl(c.fec_estado, c.fec_comprobante))) and
+       nvl(:p_fecha_has, trunc(nvl(c.fec_estado, c.fec_comprobante)))
+   and nvl(c.estado, 'N') = 'C'
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal = s.cod_sucursal
+   and (:p_cod_articulo_des is null or
+       d.cod_articulo >= :p_cod_articulo_des)
+   and (:p_cod_articulo_has is null or
+       d.cod_articulo <= :p_cod_articulo_has)
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or
+       c.tip_comprobante = :p_tip_comprobante)
+   and c.cod_empresa = tc.cod_empresa(+)
+   and c.tip_comprobante = tc.tip_comprobante(+)
+   and nvl(tc.stock, 'S') = 'S'
+
+UNION ALL
+
+select lpad(d.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       'FACTURA DE COMPRA' desc_motivo,
+       c.nro_comprobante numero,
+       nvl(trunc(c.fec_estado), c.fec_comprobante) fec_ent_sal,
+       c.cod_sucursal,
+       c.tip_comprobante cod_motivo_ent_sal,
+       0 cant_ent,
+       nvl(d.cantidad_ub, 0) cant_sal,
+       a.cod_articulo articulo,
+       null,
+       'D' tipo,
+       decode(c.cod_moneda,
+              2,
+              ((d.precio_unitario * c.tip_cambio) / d.mult_x) / d.div_x,
+              (d.precio_unitario / d.mult_x) / d.div_x) as costo_articulo,
+       d.cod_unidad_medida um,
+       c.tip_comprobante tipo_comprobante
+  from cm_compras_cabecera c,
+       cm_compras_detalle  d,
+       st_articulos        a,
+       sucursales          s,
+       tipos_comprobantes  tc
+--       parametros_generales p
+ where c.cod_empresa = :p_cod_empresa
+      --    and p.cod_modulo = 'CM'
+      --    and p.parametro = 'TIPO_FACTURA'
+      ---    and c.tip_comprobante = 'FAC'--ltrim( rtrim( p.valor ) )
+   and c.cod_empresa = d.cod_empresa
+   and c.tip_comprobante = d.tip_comprobante
+   and c.ser_comprobante = d.ser_comprobante
+   and c.nro_comprobante = d.nro_comprobante
+   and lpad(c.cod_sucursal, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal), 5, ' ')
+   and trunc(nvl(c.fec_estado, c.fec_comprobante)) between
+       nvl(:p_fecha_des, trunc(nvl(c.fec_estado, c.fec_comprobante))) and
+       nvl(:p_fecha_has, trunc(nvl(c.fec_estado, c.fec_comprobante)))
+   and nvl(c.estado, 'N') = 'C'
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal = s.cod_sucursal
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or
+       c.tip_comprobante = :p_tip_comprobante)
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and c.cod_empresa = tc.cod_empresa(+)
+   and c.tip_comprobante = tc.tip_comprobante(+)
+   and nvl(tc.stock, 'S') <> 'S'
+
+UNION ALL
+
+---SALIDA DE PRODUCCION
+select lpad(d.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       'SALIDA PRODUCCION' desc_motivo,
+       c.Nro_Produccion numero,
+       trunc(nvl(c.fec_estado, c.Fec_Produccion)) fec_ent_sal,
+       c.cod_sucursal,
+       'PRI' cod_motivo_ent_sal,
+       0 cant_ent,
+       nvl(d.cantidad, 0) cant_sal,
+       a.cod_articulo articulo,
+       null,
+       'E',
+       null costo_articulo,
+       null um,
+       null tipo_comprobante
+  from pd_produccion_cab c,
+       PD_PRODUCCION_DET d,
+       st_articulos      a,
+       sucursales        s --,
+--       parametros_generales p
+ where c.cod_empresa = :p_cod_empresa
+   and c.Tip_Produccion = 'PRI' --ltrim( rtrim( p.valor ) )
+   and c.cod_empresa = d.cod_empresa
+   and c.Tip_Produccion = d.Tip_Produccion
+   and c.Ser_Produccion = d.Ser_Produccion
+   and c.Nro_Produccion = d.Nro_Produccion
+   and lpad(c.cod_sucursal, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal), 5, ' ')
+   and trunc(nvl(c.fec_estado, c.Fec_Produccion)) between
+       nvl(:p_fecha_des, trunc(nvl(c.fec_estado, c.Fec_Produccion))) and
+       nvl(:p_fecha_has, trunc(nvl(c.fec_estado, c.Fec_Produccion)))
+   and nvl(c.estado, 'N') = 'F'
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal = s.cod_sucursal
+   and (lpad(d.cod_articulo, 20, ' ') between
+       lpad(nvl(:p_cod_articulo_des, '0'), 20, ' ') and
+       lpad(nvl(:p_cod_articulo_has, 'ZZZZZZZZZZZZZZZZZZZZ'), 20, ' '))
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or c.Tip_Produccion = :p_tip_comprobante)
+
+UNION ALL
+
+select lpad(d.cod_articulo, 20, ' ') cod_articulo,
+       a.descripcion desc_art,
+       s.descripcion desc_sucursal,
+       'ENTRADA PRODUCCION' desc_motivo,
+       c.Nro_Produccion numero,
+       trunc(nvl(c.fec_estado, c.Fec_Produccion)) fec_ent_sal,
+       c.cod_sucursal,
+       'PRI' cod_motivo_ent_sal,
+       nvl(d.cantidad, 0) cant_ent,
+       0 cant_sal,
+       a.cod_articulo articulo,
+       null,
+       'S',
+       null costo_articulo,
+       null um,
+       null tipo_comprobante
+  from pd_produccion_cab       c,
+       pd_produccion_producido d,
+       st_articulos            a,
+       sucursales              s --,
+--       parametros_generales p
+ where c.cod_empresa = :p_cod_empresa
+   and c.Tip_Produccion = 'PRI' --ltrim( rtrim( p.valor ) )
+   and c.cod_empresa = d.cod_empresa
+   and c.Tip_Produccion = d.Tip_Produccion
+   and c.Ser_Produccion = d.Ser_Produccion
+   and c.Nro_Produccion = d.Nro_Produccion
+   and lpad(c.cod_sucursal, 5, ' ') between
+       lpad(nvl(:p_cod_sucursal_des, c.cod_sucursal), 5, ' ') and
+       lpad(nvl(:p_cod_sucursal_has, c.cod_sucursal), 5, ' ')
+   and trunc(nvl(c.fec_estado, c.Fec_Produccion)) between
+       nvl(:p_fecha_des, trunc(nvl(c.fec_estado, c.Fec_Produccion))) and
+       nvl(:p_fecha_has, trunc(nvl(c.fec_estado, c.Fec_Produccion)))
+   and nvl(c.estado, 'N') = 'F'
+   and c.cod_empresa = s.cod_empresa
+   and c.cod_sucursal = s.cod_sucursal
+   and (lpad(d.cod_articulo, 20, ' ') between
+       lpad(nvl(:p_cod_articulo_des, '0'), 20, ' ') and
+       lpad(nvl(:p_cod_articulo_has, 'ZZZZZZZZZZZZZZZZZZZZ'), 20, ' '))
+   and d.cod_empresa = a.cod_empresa
+   and d.cod_articulo = a.cod_articulo
+   and (:p_cod_rubro is null or a.cod_rubro = :p_cod_rubro)
+   and (:p_cod_familia is null or a.cod_familia = :p_cod_familia)
+   and (:p_cod_linea is null or a.cod_linea = :p_cod_linea)
+   and (:p_cod_marca is null or a.cod_marca = :p_cod_marca)
+   and (:p_tip_comprobante is null or c.Tip_Produccion = :p_tip_comprobante)
+
+ ORDER BY 7, 1, 6, 5
